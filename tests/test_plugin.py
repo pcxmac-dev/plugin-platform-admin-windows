@@ -94,6 +94,14 @@ PLATFORM = BootApp("platform", "Liminal Platform", "liminal_platform", 8775, PLA
 LAB = BootApp("lab", "Liminal Lab", "liminal_lab", 8790, "liminal_lab.app.LabApp")
 
 
+def table_of(st, title):
+    return next(t for t in st["tables"] if t["title"] == title)
+
+
+def boot_table(st):
+    return table_of(st, "At boot, before anyone signs in")
+
+
 def through_uac(a):
     """Windows' prompt answered yes, as a stand-in: the elevated scripts recorded and run through the stand-in."""
     asked: list[str] = []
@@ -109,15 +117,29 @@ def test_the_plugin_reports_rights_services_startups_and_processes():
     assert MACHINE.name == "admin-windows" and MACHINE.KIND == "machine" and MACHINE.STEPS == ("privileges", "services", "startup")
     a = plugin(FakeWindows())
     st = a.status()
-    services = {s["name"]: s for s in st["services"]}
+    services = {s["name"]: s for s in st["frameworkServices"]}
     assert services["WSLService"]["state"] == "stopped" and services["com.docker.service"]["state"] == "absent" and not services["sshd"]["mayStart"]
-    startups = {(s["app"], s["name"]): s for s in st["startups"]}
+    startups = {(s["app"], s["name"]): s for s in st["logonStartups"]}
     assert startups[("charts", "LiminalCharts")]["state"] == "running" and "liminal_charts gui" in startups[("charts", "LiminalCharts")]["command"]
     assert startups[("login", "LiminalLogin")]["state"] == "absent" and ("integrator", "LiminalIntegrator-backtest") in startups
-    assert [(p["pid"], p["app"]) for p in st["processes"]] == [(63336, "charts"), (51876, "integrator")]
+    assert [(p["pid"], p["app"]) for p in st["frameworkProcesses"]] == [(63336, "charts"), (51876, "integrator")]
     assert st["summary"] == "not elevated; services: 3 running, stopped: WSLService, sshd; startups: charts, integrator; 2 Liminal process(es)"
     assert "LIMINAL_ELEVATE=prompt" in st["elevation"] and plugin(FakeWindows(), env={"LIMINAL_ELEVATE": "prompt"}).elevation().endswith("(UAC)")
     assert state_of("Running") == "running" and state_of("StartPending") == "startpending"
+    # valid while not elevated (it reads): the page draws its own tables, each change through a confirmed form
+    assert st["valid"] and st["why"] == "" and not {"services", "startups", "processes"} & set(st)
+    assert [t["title"] for t in st["tables"]] == ["Services the framework relies on", "Startups at your logon",
+                                                  "At boot, before anyone signs in", "The framework's processes"]
+    services = table_of(st, "Services the framework relies on")
+    assert "Windows asks you (UAC) when it wants an administrator" in services["note"]
+    rows = {r[0]["text"]: r for r in services["rows"]}
+    assert rows["WSLService"][4]["values"] == {"name": "WSLService", "action": "start"} and rows["com.docker.service"][4] == ""
+    logon = {r[0]: r for r in table_of(st, "Startups at your logon")["rows"] if r[1]["text"] in TASKS.values()}
+    assert logon["charts"][3]["title"] == "End…" and logon["login"][3]["form"] == "logon-register:login"
+    integrator_own = [r for r in table_of(st, "Startups at your logon")["rows"] if r[1]["text"] == "LiminalIntegrator-backtest"][0]
+    assert integrator_own[3] == "" and integrator_own[4] == ""  # an integrator of its own: shown, changed by the integrator's own command
+    forms = {f["id"] for f in st["forms"]}
+    assert {"service", "logon-startup", "logon-remove", "logon-register:login", "logon-register:platform"} <= forms
 
 
 def test_the_setup_starts_what_it_may_and_says_when_an_administrator_is_wanted():
@@ -143,6 +165,14 @@ def test_an_apps_task_is_made_run_and_removed_as_the_integrator_makes_its_own():
     a.service("WSLService", "restart")
     assert any("Restart-Service -Name 'WSLService'" in s for s in fake.scripts)
     assert a.unregister("platform") and not a.unregister("platform") and set(TASKS) == {"charts", "integrator", "login", "platform"}
+    # a service changed from the page: Windows asked (UAC) once it says an administrator is wanted; the setup's starts are not
+    denied = FakeWindows(denied=True)
+    b = plugin(denied)
+    prompted: list[str] = []
+    b.ps.run_elevated = lambda script, timeout=600.0: prompted.append(script) or ""  # Windows' prompt answered yes
+    b.service("WSLService", "start")
+    assert prompted == ["Start-Service -Name 'WSLService'"]
+    assert b.setup(log=lambda m: None, steps=("services",))[0]["ok"] is False and len(prompted) == 1
     assert a.run("Write-Output", "'hello'") == "ran\r\n" and "Write-Output 'hello'" in fake.scripts[-1]
 
 
@@ -163,15 +193,15 @@ def test_the_platform_is_registered_at_boot_through_uac_started_stopped_and_remo
     asked = through_uac(a)
     st = a.status()
     assert st["valid"] and st["why"] == ""  # not elevated: Windows asks (UAC) for each change, on this desktop
-    rows = st["tables"][0]["rows"]
+    rows = boot_table(st)["rows"]
     assert [(r[1]["text"], r[2]) for r in rows] == [("LiminalPlatformBoot", "not registered"), ("LiminalLabBoot", "not registered")]
     assert rows[0][1]["sub"].endswith("-m liminal_platform serve --no-browser --port 8775") and rows[0][3] == "PC\\ciara"
     assert rows[0][4] == {"text": "platform-boot.log", "sub": f"in {tmp_path}; its own: C:\\data\\platform\\logs\\platform.log"}
     register = {f["id"]: f for f in st["forms"]}["boot-register:platform"]
     words = register["confirm"]["words"]
     assert "LiminalPlatformBoot starts Liminal Platform at every boot" in words and "--port {port}" in words and "as PC\\ciara" in words
-    assert words.endswith("Windows asks you first (UAC).") and "S4U" in st["tables"][0]["note"]
-    assert "Unlike the startups at your logon" in st["tables"][0]["note"] and register["note"].startswith("A scheduled task At startup")
+    assert words.endswith("Windows asks you first (UAC).") and "S4U" in boot_table(st)["note"]
+    assert "Unlike the startups at your logon" in boot_table(st)["note"] and register["note"].startswith("A scheduled task At startup")
     assert "never the highest" in register["note"] and "Task Scheduler alone retries only a start that failed" in register["note"]
     made = a.register("platform", "boot", 8775)
     (script,) = asked
@@ -188,11 +218,11 @@ def test_the_platform_is_registered_at_boot_through_uac_started_stopped_and_remo
     # started as you (Windows is asked only when it wants an administrator), its page not answering yet: starting
     said = a.startup("platform", "start", "boot")
     assert len(asked) == 1 and said["said"] == "LiminalPlatformBoot started" and task["State"] == 4
-    assert {b["app"]: b["state"] for b in a.status()["boot"]}["platform"] == "starting"
+    assert {b["app"]: b["state"] for b in a.status()["bootServices"]}["platform"] == "starting"
     up = plugin(fake, env=ME, apps=[PLATFORM, LAB], logs=tmp_path, answering={8775})
     st = up.status()
-    assert {b["app"]: b["state"] for b in st["boot"]}["platform"] == "running" and "at boot: platform (running)" in st["summary"]
-    assert st["tables"][0]["rows"][0][5]["form"] == "boot-stop:platform"
+    assert {b["app"]: b["state"] for b in st["bootServices"]}["platform"] == "running" and "at boot: platform (running)" in st["summary"]
+    assert boot_table(st)["rows"][0][5]["form"] == "boot-stop:platform"
     with pytest.raises(BootRefused, match="8775 is platform's boot service's"):
         a.register("lab", "boot", 8775)
     a.startup("platform", "stop", "boot")
@@ -212,7 +242,7 @@ def test_an_elevated_platform_asks_windows_nothing_and_a_denied_start_goes_throu
     asked = through_uac(a)
     a.register("platform", "boot", 8780)
     assert asked == [] and fake.boot_tasks["LiminalPlatformBoot"]["Arguments"].endswith("--port 8780")
-    assert "Windows asks" not in a.status()["tables"][0]["note"]
+    assert "Windows asks" not in boot_table(a.status())["note"]
     fake.denied_tasks = True  # starting it wants an administrator: Windows is asked then
     b = plugin(fake, env=ME, apps=[PLATFORM], logs=tmp_path)
     prompted: list[str] = []
@@ -225,7 +255,8 @@ def test_on_no_desktop_windows_cannot_ask_so_the_plugin_says_so_and_changes_noth
     fake = FakeWindows()
     a = plugin(fake, env=ME, apps=[PLATFORM], logs=tmp_path, interactive=False)  # a boot service's own platform
     st = a.status()
-    assert st["valid"] is False and "on no desktop" in st["why"] and "cannot ask you (UAC)" in st["elevation"]
+    assert st["valid"] is True and st["why"] == "" and "cannot ask you (UAC)" in st["elevation"]  # it reads: valid
+    assert "Windows cannot ask you here (on no desktop)" in boot_table(st)["note"]  # each change says what it needs
     with pytest.raises(CommandError, match="cannot ask you"):
         a.register("platform", "boot", 8775)
     assert fake.boot_tasks == {} and not any("Register-ScheduledTask" in s for s in fake.scripts)
@@ -249,9 +280,9 @@ def test_a_task_only_an_administrator_reads_and_one_not_made_here_are_said(tmp_p
     hidden = {b.app: b for b in a.boot_startups(a.boot_apps())}["platform"]
     assert hidden.state == "unknown" and "only an administrator" in hidden.detail
     st = a.status()
-    row = next(r for r in st["tables"][0]["rows"] if r[1]["text"] == "LiminalPlatformBoot")
+    row = next(r for r in boot_table(st)["rows"] if r[1]["text"] == "LiminalPlatformBoot")
     assert row[5]["form"] == "boot-start:platform" and row[6]["form"] == "boot-remove:platform"
-    assert {"form": "boot-stop:platform", "title": "Stop Liminal Platform…"} in st["tables"][0]["actions"]
+    assert {"form": "boot-stop:platform", "title": "Stop Liminal Platform…"} in boot_table(st)["actions"]
 
 
 def test_the_forms_ask_the_startups_hooks_with_their_arguments_in_order(tmp_path):
@@ -259,7 +290,8 @@ def test_the_forms_ask_the_startups_hooks_with_their_arguments_in_order(tmp_path
     a = plugin(fake, elevated=True, env=ME, apps=[PLATFORM], logs=tmp_path)
     a.register("platform", "boot", 8775)
     forms = {f["id"]: f for f in a.status()["forms"]}
-    assert set(forms) == {"boot-register:platform", "boot-start:platform", "boot-stop:platform", "boot-remove:platform"}
+    assert {i for i in forms if i.startswith("boot-")} == {"boot-register:platform", "boot-start:platform", "boot-stop:platform",
+                                                            "boot-remove:platform"}
     for f in forms.values():
         params = list(inspect.signature(getattr(a, f["hook"])).parameters)
         assert f["hook"] in a.HOOKS and [x["name"] for x in f["fields"]] == params[:len(f["fields"])]

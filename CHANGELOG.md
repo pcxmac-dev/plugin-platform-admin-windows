@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0 (2026-11-11)
+
+Its page works unelevated (the user: "the administration plugins don't seem to work right"), on liminal-libs 1.48.0:
+- Valid whenever it reads this PC: not running as administrator no longer disables it and takes it out of the tray. The
+  rights are a fact on its page; each change confirmed there asks Windows (UAC) when Windows wants an administrator, or
+  says it needs one where Windows cannot ask (on no desktop).
+- Its page draws its own tables with confirmed forms: the services the framework relies on (Start…, Stop…, Restart…:
+  through UAC when Windows wants an administrator; the setup's own starts still ask only with LIMINAL_ELEVATE=prompt),
+  the startups at your logon (Register…, Run…, End…, Remove…: as you, no administrator), at boot (0.2.0's section), and
+  the framework's processes. The status's lists are frameworkServices, logonStartups, bootServices, frameworkProcesses.
+
 ## 0.2.0 (2026-11-11)
 
 The platform at boot, before anyone signs in (the user: "also windows and linux admin, need sections for starting the

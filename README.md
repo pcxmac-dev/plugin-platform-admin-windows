@@ -23,9 +23,15 @@ library's `machines.windows.PowerShell`):
 - The platform at boot, before anyone signs in (below).
 - The framework's processes: their app, command line and memory.
 
-The plugin is valid when the platform runs as administrator, or when Windows can ask you (UAC) for a change that needs
-it: on your desktop. A platform on no desktop (one a boot task started) cannot ask, so there it is valid only as
-administrator.
+Its page is its own tables, each change through a form confirmed in the page's dialog: **Services the framework relies
+on** (Start…, Stop…, Restart…), **Startups at your logon** (Register…, Run…, End…, Remove…), **At boot, before anyone
+signs in** (below) and **The framework's processes**.
+
+The plugin is valid whenever it reads this PC, running as administrator or not (0.3.0): the rights are a fact on its
+page. A change you confirm asks Windows (UAC) when Windows wants an administrator: a service's start, stop or restart,
+a boot task's registration or removal. On no desktop (a platform a boot task started) Windows cannot ask, and the
+change says so. A startup at your logon needs no administrator. The setup's own starts ask only with
+`LIMINAL_ELEVATE=prompt`.
 
 ## At boot, before anyone signs in
 
@@ -68,7 +74,8 @@ How a boot task differs from the startups at your logon:
   started and stopped as you, through UAC only when Windows wants an administrator. A task only an administrator may
   read is said as registered, its state unknown.
 - **From the platform at your logon.** The platform a boot task serves runs on no desktop, where Windows cannot ask:
-  register, start, stop and remove boot tasks from the platform at your logon, or from the command line.
+  its admin page still reads everything, and says so of each change; register, start, stop and remove boot tasks from
+  the platform at your logon, or from the command line.
 
 ## From the command line
 

@@ -36,7 +36,7 @@ from liminal_libs.machines.admin import Admin, BootApp, BootRefused, Startup, Sy
 from liminal_libs.machines.plugin import CommandError
 from liminal_libs.machines.windows import ELEVATE_VAR, PowerShell, is_elevated, quote
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 TASKS = {"charts": "LiminalCharts", "integrator": "LiminalIntegrator", "login": "LiminalLogin", "platform": "LiminalPlatform"}
 VERBS = {"start": "Start-Service", "stop": "Stop-Service", "restart": "Restart-Service"}
 TASK_VERBS = {"run": "Start-ScheduledTask", "end": "Stop-ScheduledTask", "enable": "Enable-ScheduledTask", "disable": "Disable-ScheduledTask"}
@@ -147,7 +147,8 @@ class WindowsAdminPlugin(Admin):
         env = os.environ if self._env is None else self._env
         if (env.get(ELEVATE_VAR) or "").strip().lower() == "prompt":
             return "not elevated: a step needing an administrator asks you first (UAC)"
-        return f"not elevated: run the platform as administrator, or set {ELEVATE_VAR}=prompt to be asked (UAC) when a step needs it"
+        return ("not elevated: a change you confirm on this page asks you (UAC) when Windows wants an administrator; the "
+                f"setup's own steps ask only with {ELEVATE_VAR}=prompt (or run the platform as administrator)")
 
     def services(self) -> list[SystemService]:
         names = ",".join(quote(s[0]) for s in self.SERVICES)
@@ -163,6 +164,21 @@ class WindowsAdminPlugin(Admin):
 
     def _service_action(self, name: str, action: str) -> None:
         self.ps.run_admin(f"{VERBS[action]} -Name {quote(name)}")
+
+    def _service_change(self, name: str, action: str) -> None:
+        """A service changed as you asked on the page: as it is when the platform is elevated, else through Windows' prompt
+        (UAC) once Windows says an administrator is wanted (the setup's starts still ask only with LIMINAL_ELEVATE=prompt)."""
+        self._as_admin(f"{VERBS[action]} -Name {quote(name)}")
+
+    def rights_words(self, kind: str) -> str:
+        if kind == "logon":
+            return "As you: no administrator is needed"
+        if self.elevated():
+            return ""
+        if self.ps.can_ask():
+            return "Windows asks you first (UAC)" if kind == "boot" else "Windows asks you (UAC) when it wants an administrator"
+        return ("It needs an administrator, and Windows cannot ask you here (on no desktop): run this platform as administrator, "
+                "or make the change from the platform at your logon")
 
     def startups(self) -> list[Startup]:
         rows = self.ps.json("Get-ScheduledTask -TaskName 'Liminal*' -ErrorAction SilentlyContinue | ForEach-Object { "
@@ -234,9 +250,6 @@ class WindowsAdminPlugin(Admin):
                 "pythonw.exe and the library's keeper: started again 10 s after a failure, waiting up to 10 min while it keeps "
                 f"failing (Task Scheduler alone retries only a start that failed, {RESTARTS[0]} times {RESTARTS[1]} min apart); "
                 "ending the task ends the app with its keeper")
-
-    def boot_rights(self) -> str:
-        return "" if self.elevated() else "Windows asks you first (UAC)"
 
     def boot_stopping(self) -> str:
         return "Task Scheduler ends its keeper, and the app with it"
