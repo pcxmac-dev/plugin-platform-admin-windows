@@ -8,7 +8,7 @@ linux admin plugin for platform".
 
 ## What it does
 
-A machine plugin of the platform (`liminal_libs.machines.admin.Admin`, plugin API 2.1), through PowerShell (the
+A machine plugin of the platform (`liminal_libs.machines.admin.Admin`, plugin API 2.2), through PowerShell (the
 library's `machines.windows.PowerShell`):
 
 - The rights: whether the platform runs as administrator; with `LIMINAL_ELEVATE=prompt` a step needing them asks
@@ -94,3 +94,29 @@ python -m plugin_platform_admin_windows processes
 ```
 
 The platform app drives the same hooks from its page.
+
+## Its API
+
+The user's words (2026-11-11): "each plugin should reflect the the API its attached to, and present links that provide
+documentation, the plugin interface should more or less contain what it already has, BUT, it should also expose more of
+what the API is about". Since 0.4.0 (plugin API 2.2) the plugin declares what it attaches to (`apis.py`), and the
+platform's page draws each card: what the API is, its links, every part of it (those the plugin uses first, the rest
+under "more of the API") and every call it makes, with the API's other notable calls beside them.
+
+- **Windows PowerShell 5.1** and its elevation: [about_PowerShell_exe](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_powershell_exe?view=powershell-5.1),
+  [Start-Process](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/start-process?view=powershell-5.1)
+  (`-Verb RunAs`: Windows asks you), [User Account Control](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/user-account-control/).
+- **ScheduledTasks**: [the module](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/?view=windowsserver2025-ps),
+  [New-ScheduledTaskPrincipal](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtaskprincipal?view=windowsserver2025-ps)
+  (S4U at boot), [Register-ScheduledTask](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/register-scheduledtask?view=windowsserver2025-ps).
+- **Task Scheduler (COM)**: [Task Scheduler](https://learn.microsoft.com/en-us/windows/win32/taskschd/task-scheduler-start-page),
+  [its scripting objects](https://learn.microsoft.com/en-us/windows/win32/taskschd/task-scheduler-objects), the boot
+  tasks' read.
+- **Windows services**: [Get-Service](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/get-service?view=powershell-5.1)
+  and Start-, Stop-, Restart-Service.
+- **CIM: Win32_Process**: [the class](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-process),
+  [Get-CimInstance](https://learn.microsoft.com/en-us/powershell/module/cimcmdlets/get-ciminstance?view=powershell-5.1).
+
+The plugin keeps nothing of these APIs between two reads, so `api_facts()` is the contract's: nothing to say. Every
+address on the cards was read on 2026-11-11; the test `test_the_cards_pages_answer` asks each of them again when
+`LIMINAL_VENDOR_PAGES=1` is set (it is skipped otherwise).

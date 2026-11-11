@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.0 (2026-11-11)
+
+Its API on its page, plugin API 2.2 (the user: "each plugin should reflect the the API its attached to, and present
+links that provide documentation, the plugin interface should more or less contain what it already has, BUT, it should
+also expose more of what the API is about"). Five cards (`apis.py`), each with Microsoft Learn's pages, every part of
+the API said covered or not, and every call the plugin makes beside the API's other notable ones:
+- Windows PowerShell 5.1: the command line it runs every script with, JSON, elevation through Start-Process -Verb RunAs
+  (UAC), IsUserAnAdmin and the desktop check.
+- ScheduledTasks: the tasks at your logon and the platform's at boot, read, run, ended, turned on and off, defined
+  (the action, the logon or startup trigger, the S4U principal, the settings), registered and removed.
+- Task Scheduler (COM): the boot tasks' read (the service, the root folder, each task's state, definition and
+  principal).
+- Windows services: Get-Service, Start-, Stop- and Restart-Service.
+- CIM: Win32_Process: the framework's processes.
+
+It keeps nothing of them between two reads: `api_facts()` stays the contract's ({}). Tests: the cards name every cmdlet
+the plugin's scripts send over every read and change (a stand-in powershell.exe), the COM members of the boot read and
+the library's own PowerShell calls; a link check runs with LIMINAL_VENDOR_PAGES=1. Needs liminal-libs>=1.49.0.
+
 ## 0.3.0 (2026-11-11)
 
 Its page works unelevated (the user: "the administration plugins don't seem to work right"), on liminal-libs 1.48.0:

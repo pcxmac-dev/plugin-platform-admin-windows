@@ -19,6 +19,12 @@ Registered and removed through Windows' prompt (UAC: PowerShell.run_elevated) un
 change confirmed on the page, a removal twice; started and stopped as you, or through UAC when Windows wants an
 administrator. Its log beside the platform's: <platform>\\logs\\<app>-boot.log.
 
+What it attaches to (0.4.0, plugin API 2.2; the user, 2026-11-11: "each plugin should reflect the the API its attached
+to, and present links that provide documentation"): Windows PowerShell and its elevation (UAC), the ScheduledTasks
+cmdlets, Task Scheduler's COM objects, the service cmdlets and CIM's Win32_Process, each with Microsoft Learn's pages,
+its parts and its calls (apis.py), drawn on the plugin's page. It keeps nothing of them between two reads, so it has no
+facts to say beside them (api_facts: the contract's, {}).
+
     python -m plugin_platform_admin_windows status | setup [STEP ...] | services | startups | boot | processes
                                             | service NAME start|stop|restart | startup APP run|end|enable|disable
                                             | startup APP start|stop --boot | register APP [--boot [--port N]]
@@ -36,7 +42,9 @@ from liminal_libs.machines.admin import Admin, BootApp, BootRefused, Startup, Sy
 from liminal_libs.machines.plugin import CommandError
 from liminal_libs.machines.windows import ELEVATE_VAR, PowerShell, is_elevated, quote
 
-__version__ = "0.3.0"
+from .apis import APIS
+
+__version__ = "0.4.0"
 TASKS = {"charts": "LiminalCharts", "integrator": "LiminalIntegrator", "login": "LiminalLogin", "platform": "LiminalPlatform"}
 VERBS = {"start": "Start-Service", "stop": "Stop-Service", "restart": "Restart-Service"}
 TASK_VERBS = {"run": "Start-ScheduledTask", "end": "Stop-ScheduledTask", "enable": "Enable-ScheduledTask", "disable": "Disable-ScheduledTask"}
@@ -108,7 +116,8 @@ class WindowsAdminPlugin(Admin):
     title = "Windows administration"
     about = ("This PC for the framework: whether the platform runs as administrator, the Windows services it relies on, "
              "the apps' scheduled tasks at your logon, the platform's at boot, the framework's processes")
-    api = "2.1"
+    api = "2.2"
+    apis = APIS  # what it attaches to: PowerShell and UAC, ScheduledTasks, Task Scheduler (COM), services, Win32_Process
     order = 720
     BOOT_SERVICES = True
     SERVICES = (("WSLService", "Windows Subsystem for Linux", "the WSL distributions and Docker inside them", True),
