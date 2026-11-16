@@ -44,7 +44,7 @@ from liminal_libs.machines.windows import ELEVATE_VAR, PowerShell, is_elevated, 
 
 from .apis import APIS
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 TASKS = {"charts": "LiminalCharts", "integrator": "LiminalIntegrator", "login": "LiminalLogin", "platform": "LiminalPlatform"}
 VERBS = {"start": "Start-Service", "stop": "Stop-Service", "restart": "Restart-Service"}
 TASK_VERBS = {"run": "Start-ScheduledTask", "end": "Stop-ScheduledTask", "enable": "Enable-ScheduledTask", "disable": "Disable-ScheduledTask"}
@@ -119,6 +119,7 @@ class WindowsAdminPlugin(Admin):
     api = "2.2"
     apis = APIS  # what it attaches to: PowerShell and UAC, ScheduledTasks, Task Scheduler (COM), services, Win32_Process
     order = 720
+    SECTION = "os"  # drawn under the platform's OS plugins (liminal-platform 0.26.0)
     BOOT_SERVICES = True
     SERVICES = (("WSLService", "Windows Subsystem for Linux", "the WSL distributions and Docker inside them", True),
                 ("vmcompute", "Hyper-V Host Compute Service", "WSL 2's virtual machine", True),
