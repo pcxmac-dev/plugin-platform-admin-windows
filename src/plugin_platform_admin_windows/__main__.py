@@ -1,8 +1,12 @@
 """`python -m plugin_platform_admin_windows status | setup [STEP ...] | services | startups | boot | processes
 | service NAME start|stop|restart | startup APP run|end|enable|disable | startup APP start|stop --boot
 | register APP [--boot [--port N]] | unregister APP [--boot --accept-removal] | run [--elevated] -- COMMAND`: the plugin
-from the command line (the platform app drives the same hooks). `--boot`: the app's boot task (LiminalPlatformBoot) rather
-than its task at logon; a boot task's removal is asked twice, so it needs --accept-removal."""
+from the command line, in its own process. The platform app asks the same hooks from its page, its changes only from
+there (PAGE_ONLY_HOOKS, 0.4.2), but for run(), which no route of the platform's asks since liminal-platform 0.34.1.
+`--boot`: the app's boot task (LiminalPlatformBoot) rather than its task at logon; a boot task's removal is asked twice,
+so it needs --accept-removal. `run` runs the command as you, and through Windows' prompt (UAC) only with `--elevated` as
+its first word (0.4.2): an `--elevated` anywhere else is one of the command's words, and is kept. With no command, or
+with `--elevated` said twice before it, it shows the usage and runs nothing."""
 from __future__ import annotations
 
 import json
@@ -74,10 +78,10 @@ def main(argv: list[str] | None = None) -> int:
                 print("removed" if MACHINE.unregister(words[0]) else f"{words[0]} had no startup")
             return 0
         if what == "run":
-            elevated = "--elevated" in rest
-            rest = [w for w in rest if w != "--elevated"]
+            elevated = rest[:1] == ["--elevated"]  # a word of its own, before the command's `--`: never one of its words
+            rest = rest[1:] if elevated else rest
             command = rest[1:] if rest[:1] == ["--"] else rest
-            if command:
+            if command and rest[:1] != ["--elevated"]:  # said twice: the usage, never a command named --elevated
                 print(MACHINE.run(*command, elevated=elevated), end="")
                 return 0
     except CommandError as e:

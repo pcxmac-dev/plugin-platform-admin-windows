@@ -25,6 +25,16 @@ cmdlets, Task Scheduler's COM objects, the service cmdlets and CIM's Win32_Proce
 its parts and its calls (apis.py), drawn on the plugin's page. It keeps nothing of them between two reads, so it has no
 facts to say beside them (api_facts: the contract's, {}).
 
+Who may ask its changes (0.4.2; the review of PLT-H1's fix, 2026-11-24): a service started, stopped or restarted, and a
+startup run, ended, turned on or off, made or removed, at your logon or at boot, are asked only from its page
+(PAGE_ONLY_HOOKS): another plugin's ask is refused, and the platform asks its login whether you are at the page. Before,
+any program on this PC could ask them with two headers: on a platform run as administrator, the SSH server started or
+WSL stopped with no prompt; on one that is not, Windows' prompt (UAC) for a change nobody asked for. Its reads are asked
+by anyone. And `register` takes no program from an ask: a task runs this Python's pythonw.exe, the platform's own. The
+library's register takes one as its fourth argument and the platform hands an ask's arguments on as they come, so a
+program any account could write to a public folder replaced the LiminalPlatform task and ran at your next sign-in, or
+at every boot. The command line calls the same code in its own process.
+
     python -m plugin_platform_admin_windows status | setup [STEP ...] | services | startups | boot | processes
                                             | service NAME start|stop|restart | startup APP run|end|enable|disable
                                             | startup APP start|stop --boot | register APP [--boot [--port N]]
@@ -44,7 +54,7 @@ from liminal_libs.machines.windows import ELEVATE_VAR, PowerShell, is_elevated, 
 
 from .apis import APIS
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 TASKS = {"charts": "LiminalCharts", "integrator": "LiminalIntegrator", "login": "LiminalLogin", "platform": "LiminalPlatform"}
 VERBS = {"start": "Start-Service", "stop": "Stop-Service", "restart": "Restart-Service"}
 TASK_VERBS = {"run": "Start-ScheduledTask", "end": "Stop-ScheduledTask", "enable": "Enable-ScheduledTask", "disable": "Disable-ScheduledTask"}
@@ -127,6 +137,13 @@ class WindowsAdminPlugin(Admin):
                 ("MpsSvc", "Windows Defender Firewall", "the firewall plugin", True),
                 ("Dnscache", "DNS Client", "every lookup: the mail record, the feeds", True),
                 ("sshd", "OpenSSH SSH Server", "remote access to this PC (shown; never started by the setup)", False))
+    # Its changes, asked only from its page (0.4.2, the review of PLT-H1's fix; liminal-libs 1.66.0's apps/asking.py):
+    # another plugin's ask is refused (403), and liminal-platform 0.34.0 refuses one over HTTP (401) unless its login
+    # shows that you are at the page. Before, any program on this PC could ask them with two headers, the page's dialog
+    # being the only confirmation: on a platform run as administrator, sshd started, WSLService or Docker Desktop's
+    # service stopped, a boot task registered or removed, with no prompt. The setup and the command line call their
+    # code directly, not through an ask; its reads are asked by anyone.
+    PAGE_ONLY_HOOKS = ("service", "startup", "register", "unregister")
 
     def __init__(self, powershell: PowerShell | None = None, env=None, elevated=None, apps=None, logs: Path | None = None,
                  python: str | None = None, listening=None):
@@ -211,6 +228,14 @@ class WindowsAdminPlugin(Admin):
 
     def _startup_action(self, app: str, action: str) -> None:
         self.ps.run(f"{TASK_VERBS[action]} -TaskName {quote(TASKS[app])} | Out-Null")
+
+    def register(self, app: str, at: str = "logon", port=None) -> Startup:
+        """The app started from now on, made, not run: at your logon (its scheduled task), or `at` "boot" at boot,
+        before anyone signs in, at `port`. Its task runs this Python's pythonw.exe, the platform's own (a test's, given
+        to the constructor), never a program an ask names (0.4.2, the review of PLT-H1's fix): the library's register
+        takes one as its fourth argument, and the platform hands an ask's arguments on as they come. An ask naming one
+        is refused as too many arguments (TypeError; the platform answers 400) before any script runs."""
+        return super().register(app, at, port, python=self._python)
 
     def _register(self, app: str, command: list[str]) -> None:
         exe, *args = command
@@ -363,7 +388,8 @@ class WindowsAdminPlugin(Admin):
                 for r in rows]
 
     def run(self, *command: str, elevated: bool = False, **options) -> str:
-        """A PowerShell command line on this PC, its output; `elevated`: through Windows' prompt (UAC)."""
+        """A PowerShell command line on this PC, its output: as the platform runs, and through Windows' prompt (UAC) only
+        when its caller says `elevated` (the review's PLT-H1, 2026-11-23); one refused as you is not asked again elevated."""
         script = " ".join(command)
         return self.ps.run_elevated(script) if elevated else self.ps.run(script)
 

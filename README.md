@@ -91,9 +91,16 @@ python -m plugin_platform_admin_windows register platform --boot --port 8775    
 python -m plugin_platform_admin_windows startup platform start --boot
 python -m plugin_platform_admin_windows unregister platform --boot --accept-removal
 python -m plugin_platform_admin_windows processes
+python -m plugin_platform_admin_windows run -- Get-Service WSLService                 # as you
+python -m plugin_platform_admin_windows run --elevated -- Restart-Service WSLService  # Windows asks (UAC)
 ```
 
-The platform app drives the same hooks from its page.
+The platform app drives the same hooks from its page, its changes only from there (0.4.2): `service`, `startup`,
+`register` and `unregister` are its `PAGE_ONLY_HOOKS`, so another plugin's ask of one is refused, and the platform asks
+its login whether you are at the page before it asks one over HTTP. A task runs this Python's pythonw.exe, the
+platform's own: no ask names the program. `run` is the command line's alone (no route of the platform's asks it since
+liminal-platform 0.34.1): `--elevated` counts only as its first word, and every word after the command's `--` is the
+command's own.
 
 ## Its API
 

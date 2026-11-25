@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from liminal_libs.machines.admin import ACCEPT_REMOVAL, PLATFORM_APP, BootApp, BootRefused, RemovalRefused
+from liminal_libs.machines.admin import ACCEPT_REMOVAL, PLATFORM_APP, BootApp, BootRefused, RemovalRefused, interpreter
 from liminal_libs.machines.plugin import CommandError
 from liminal_libs.machines.windows import ERROR_MARK, PowerShell, decoded
 
@@ -155,10 +155,11 @@ def test_the_setup_starts_what_it_may_and_says_when_an_administrator_is_wanted()
 def test_an_apps_task_is_made_run_and_removed_as_the_integrator_makes_its_own():
     fake = FakeWindows()
     a = plugin(fake)
-    made = a.register("platform", python=sys.executable)
+    made = a.register("platform")
     script = next(s for s in fake.scripts if "Register-ScheduledTask" in s)
     assert "-TaskName 'LiminalPlatform'" in script and "New-ScheduledTaskTrigger -AtLogOn -User \"$env:USERDOMAIN\\$env:USERNAME\"" in script
     assert "-Argument '-m liminal_platform serve --no-browser'" in script and "-ExecutionTimeLimit ([TimeSpan]::Zero)" in script
+    assert fake.tasks["LiminalPlatform"]["Execute"] == interpreter(sys.executable)  # this Python: the test's
     assert made.app == "platform" and made.state == "ready"
     a.startup("platform", "run")
     assert any("Start-ScheduledTask -TaskName 'LiminalPlatform'" in s for s in fake.scripts)
